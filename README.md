@@ -1,7 +1,7 @@
 # Advanced Data Analyses for Bike Rental Systems BiciMAD in R
 A comprehensive guide in R on how to use clustering to make Bike distribution more efficient for Madrid's bike rental system.
 
-![Alt Text](https://www.bicimad.com/sites/default/files/2023-02/01-bicimad-escena-principal.gif)
+![Alt Text](https://estaticos.esmadrid.com/cdn/farfuture/N8s4Z3VkdGft1o4RYDSdEMWqApvzxLO-bLJXAEDLQfA/mtime:1702456645/sites/default/files/styles/content_type_full/public/editorial/bicimad_2023_estacion.jpg?itok=wxHN572P)
 
 
 In this repository, you will find common and advanced data analyses for bike rental systems. In particular, this repository contains:
