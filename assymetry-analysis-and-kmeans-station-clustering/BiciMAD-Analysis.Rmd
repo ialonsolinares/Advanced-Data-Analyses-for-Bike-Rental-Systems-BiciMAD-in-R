@@ -1,0 +1,1075 @@
+---
+title: "Analisis del sistema de bicicletas electricas sostenibles de Madrid, BiciMAD"
+author: "Anónimo hasta resolución de premios TFG"
+date: "23 de febrero de 2020"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
+```
+
+## 1-Notas aclaratorias y breve resumen {.tabset .tabset-fade .tabset-pills}
+
+BiciMAD es el sistema de bicicletas electricas de Madrid. Es uno de los medios mas novedosos y limpios de la capital y podria suponer una autentica revolucion en el futuro de la movilidad urbana. A 31 de Enero de 2020, cuenta con mas de 62000 abonados anuales y lo han usado hasta 148000 usuarios ocasionales desde el inicio del sistema.
+
+Este archivo es un breve analisis de las cuestiones mas importantes que rodean a BiciMAD. En el mismo, se han omitido caracteres especiales del castellano como tildes, apostrofes etc, debido al encoding UTF-8. Disculpen las molestias.
+
+>Los datos se han obtenido del portal de datos abiertos de Madrid, OPENDATA, subidos por la EMT de Madrid y se pueden encontrar en la siguiente URL:
+https://opendata.emtmadrid.es/Datos-estaticos/Datos-generales-(1) 
+
+
+
+## 2-Creacion del archivo a analizar {.tabset .tabset-fade .tabset-pills}
+Lectura de nuestros archivos mensuales CSV, una vez convertidos.
+Leeremos los archivos mensuales uno a uno, agregando un separador ";" para que se lea correctamente, en caso de necesitarlo.
+```{r}
+#Enero<-read.csv("201801_BICIMAD_GEO.csv", sep=";")
+#Febrero<-read.csv("201802_BICIMAD_GEO.csv", sep=";")
+#Marzo<-read.csv("201803_BICIMAD_GEO.csv", sep=";")
+#Abril<-read.csv("201804_BICIMAD_GEO.csv", sep=";")
+#Mayo<-read.csv("201805_BICIMAD_GEO.csv", sep=";")
+#Junio<-read.csv("201806_BICIMAD_GEO.csv", sep=";")
+#Julio<-read.csv("201807_BICIMAD_GEO.csv", sep=";")
+#Agosto<-read.csv("201808_BICIMAD_GEO.csv", sep=";")
+#Septiembre<-read.csv("201809_BICIMAD_GEO.csv", sep=";")
+#Octubre<-read.csv("201810_BICIMAD_GEO.csv", sep=";")
+#Noviembre<-read.csv("201811_BICIMAD_GEO.csv", sep=";")
+#Diciembre<-read.csv("201812_BICIMAD_GEO.csv",sep=";")
+
+```
+
+#### 2.1-Juntaremos los archivos 
+Con la funcion plyr::rbind.fill, que juntara las filas de nuestros archivos mensuales en una gran base de datos
+
+*Nota:Tambien podemos realizar el mismo proceso con el paquete dplyr y la funcion bind_rows o rbind utilizando base R
+```{r}
+
+#library(plyr)
+#library(utils)
+
+#Juntamos los archivos en un solo "dataset" para trabajar mas facilmente.
+
+#BiciMAD<-rbind.fill(Enero,Febrero,Marzo,Abril,Mayo,Junio,Julio,Agosto,Septiembre,Octubre,Noviembre,Diciembre)
+
+#Para liberar memoria RAM, quitaremos los archivos mensuales del Global Environment
+
+#rm(Enero)
+#rm(Febrero)
+#rm(Marzo)
+#rm(Abril)
+#rm(Mayo)
+#rm(Junio)
+#rm(Julio)
+#rm(Agosto)
+#rm(Septiembre)
+#rm(Octubre)
+#rm(Noviembre)
+#rm(Diciembre)
+
+##Una vez realizado esto, podemos guardar el archivo resultante "BiciMAD" como CSV para cargarlo directamente cuando procedamos al analisis 
+#utils::write.csv(BiciMAD,"BiciMAD.csv")
+
+#quitaremos el paquete plyr puesto que puede causar problemas con el paquete dplyr que posteriormente utilizaremos.
+#detach("package:plyr")  
+
+```
+
+
+
+## 3-Primeros comandos {.tabset .tabset-fade .tabset-pills}
+```{r}
+
+#Ahora, abriremos el archivo BiciMAD que hemos creado
+BiciMAD<-read.csv("BiciMAD.csv")
+
+#Comenzaremos mirando la estructura de nuestros datos
+str(BiciMAD)
+
+
+#Como vemos, algunas variables estan codificadas con clases distintas a lo que deberian ser. Procedemos a corregir estas variables
+
+#Factores
+BiciMAD$ageRange<-as.factor(BiciMAD$ageRange)
+BiciMAD$idplug_base<-as.factor(BiciMAD$idplug_base)
+BiciMAD$idplug_station<-as.factor(BiciMAD$idplug_station)
+BiciMAD$idunplug_base<-as.factor(BiciMAD$idunplug_base)
+BiciMAD$idunplug_station<-as.factor(BiciMAD$idunplug_station)
+
+#Codificaremos las variables de latitud y longitud para ver si sus niveles corresponden con address_start y address_end
+BiciMAD$long_end<-as.factor(BiciMAD$long_end)
+BiciMAD$long_start<-as.factor(BiciMAD$long_start) 
+BiciMAD$lat_end<-as.factor(BiciMAD$lat_end)
+BiciMAD$lat_start<-as.factor(BiciMAD$lat_start)
+
+BiciMAD$user_type<-as.factor(BiciMAD$user_type)
+BiciMAD$zip_code<-as.factor(BiciMAD$zip_code)
+
+#Fecha de salida de la bici, especificando formato dia/mes/ano
+BiciMAD$unplug_hourDate<-as.Date(BiciMAD$unplug_hourDate, format="%d/%m/%Y")
+
+#Quitaremos variables que NO nos dan informacion util (X_id y user_day_code)
+BiciMAD$X_id<-NULL
+BiciMAD$user_day_code<-NULL
+
+#Variables numericas
+BiciMAD$travel_time<-as.numeric(BiciMAD$travel_time)
+
+```
+
+A priori, parece que en este dataset son todo factores o variables categoricas. Al ser un dataset que nos indica los puntos de A a B, muchas variables cuentan con los mismos casos(Ej. si un individuo u otro dejan la bici en Plaza del sol, las variables de address, longitud y latitud seran las mismas tanto para uno como para el otro.)
+
+La unica variable que no se repite y que es medida (independiente para cada usuario) es travel_time que mide el tiempo en segundos de A a B. Tambien he ajustado la variable de fecha como fecha y no como factor.
+
+#### 3.1-Correccion de errores/NAs variable a variable
+Procedemos a explorar estadistica simple y si hay NA's en nuestra base de datos. Realizamos un "str" y un "summary" para comprobar cambios.
+```{r}
+#Funcion de estrutura
+str(BiciMAD)
+
+#Funcion de summary
+summary(BiciMAD)
+
+#Comprobar NAs en variables de perfil del usuario
+table(is.na(BiciMAD$ageRange))
+table(is.na(BiciMAD$user_type))
+table(is.na(BiciMAD$zip_code))
+
+#Comprobar NAs en variables ORIGEN DEL RECORRIDO
+table(is.na(BiciMAD$idunplug_base))
+table(is.na(BiciMAD$idunplug_station))
+table(is.na(BiciMAD$address_start))
+table(is.na(BiciMAD$long_start))
+table(is.na(BiciMAD$lat_start))
+
+#Comprobar NAs en variables DESTINO DEL RECORRIDO
+table(is.na(BiciMAD$idplug_base))
+table(is.na(BiciMAD$idplug_station))
+table(is.na(BiciMAD$address_end))
+table(is.na(BiciMAD$long_end))
+table(is.na(BiciMAD$lat_end))
+
+#Comprobar NAs en otras variables de tiempo
+table(is.na(BiciMAD$travel_time))
+table(is.na(BiciMAD$unplug_hourDate))
+table(is.na(BiciMAD$unplug_hourTime))
+```
+
+Como podemos observar, la unica variable con NAs es "zip_code". Recordemos que anteriormente hicimos un VLOOKUP/INDEXMATCH en EXCEL para crear las variables de "adress", "long" y "lat". Si no encontraba el registro de la estacion, Excel devolvia #N/A! (escrito y no un NA como variable nula) por lo que debemos buscar estos valores en nuestra base de datos y eliminarlos.
+
+En nuestro primer str() hemos podido ver que address tiene 173 niveles como factor, lo mismo que en long y lat. Sin embargo, cuando realice el VLOOKUP/INDEXMATCH en Excel, solo tenia 172 estaciones oficialmente (tanto en el archivo de bases que relacionaba estaciones con IDs como los archivos de las bases de datos con la variable idplug y unplug con las que estoy trabajando). Esto significa por lo tanto, que hay UNA estacion que sobra.
+
+```{r}
+
+#Este comando creara otro dataframe donde podemos ver que efectivamente, hay otra estacion oculta en los datos. La numero 2008.
+NA_escrito<-subset(BiciMAD, address_start=="#N/A") 
+
+summary(NA_escrito)
+
+#Con el comando summary, una vez mas, podemos ver que estos registros se dan en el mes de Octubre, con mas casos sobre las 9:00 y 16:00, donde las bases mas utilizadas para desengancharlas son la primera, segunda y tercera y el tipo de usuario suele ser 1(suscriptor) o 3(empleado). Es posible que esto sea un almacen o bien un simple fallo, por lo que procedere a borrar todos los registros de la estacion 2008
+
+rm(NA_escrito)
+
+BiciMAD_sin2008<-subset(BiciMAD, address_start!="#N/A") 
+str(BiciMAD_sin2008)
+
+```
+
+Antes de comenzar a trabajar con los datos realizaremos otro ajuste importante. Hay veces en las que un usuario por desconocimiento del sistema de BiciMAD puede desanclar y volver a anclar una bicicleta en el mismo sitio Y DONDE LA VARIABLE travel_time SUELE SER MUY PEQUENA, esto es un falso positivo. Hay otras veces donde desanclar y anclar de nuevo la bicicleta con un travel_time elevado puede significar que el usuario ha ido a hacer algo y ha vuelto, probablemente porque viva cerca de la direccion de origen/destino.
+
+Por ello, voy a hacer un "subset" donde las estaciones "unplug" y "plug" (origen y destino) no sean la misma O BIEN, donde la variable de tiempo "travel_time" supere los 90 segundos, un minuto y medio, porque puede ser factible realizar el recorrido si las estaciones estan muy cercanas en este tiempo. De la misma manera, tambien es factible que alguien haga un recorrido largo donde origen y destino sean iguales. Una vez realizado esto, podemos observar que hay otros viajes donde la estacion de origen y destino no es la misma y el travel_time es inferior a los 45 segundos, esto puede deberse a fallos en el sistema de BiciMAD, por lo que no borrare dichos registros.
+
+```{r}
+
+#Eliminacion de falsos positivos (misma estacion plug y unplug o trayectos con menos de 90 segundos de recorrido)
+BiciMAD_sin2008_travel_timeadj<-subset(BiciMAD_sin2008, idunplug_station!=idplug_station | travel_time>=90)
+
+rm(BiciMAD)
+rm(BiciMAD_sin2008)
+```
+
+
+
+## 4-Analisis exploratorio de BiciMAD {.tabset .tabset-fade .tabset-pills}
+
+#### 4.1-Ajustes preliminares
+```{r}
+
+#Cargaremos la mayoria de librerias a utilizar
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(geosphere)
+library(shiny)
+library(Rcpp)
+library(leaflet)
+library(ggmap)
+library(tidyverse)
+
+
+#Reasignamos el dataset ajustado a un nombre mas corto, BiciMAD
+BiciMAD<-BiciMAD_sin2008_travel_timeadj
+
+#Borraremos el antiguo dataset para liberar memoria RAM
+rm(BiciMAD_sin2008_travel_timeadj)
+```
+
+#### 4.2-Analisis exploratorio de la variable medible, tiempo de recorrido o travel_time
+```{r}
+
+min(BiciMAD$travel_time) 
+max(BiciMAD$travel_time)
+
+#Como podemos observar el minimo registro en la variable es 0. Esto puede deberse a fallos de medicion en la bicicleta, de la misma manera el maximo es de 5730890 segundos, decidimos investigarlo.
+
+head(arrange(BiciMAD,desc(travel_time)), n = 10)
+
+#Como podemos observar los registros mas altos son los de empleados o user_type = 3, probablemente por labores de mantenimiento y recolocacion de las bicicletas. De la misma manera, podemos ver donde las recolocan, con la Calle Gutierrez Abascal numero 2 o Guzman el Bueno numero 2 como origen y Paseo de la Castellana numero 67 y Calle Ortega y Gasset numero 6 como destino. A la hora de calcular la asimetria de las estaciones, NO quitaremos ningun registro de los empleados ya que queremos ver la asimetria real despues de la labor de los mismos.
+
+```
+
+Tiempo de recorrido o travel_time y su relacion con los grupos de edad o ageRange
+```{r}
+
+#Grafico rapido para ver el recuento de usuarios segun su grupo de edad. Como vemos, no todos los grupos de edad son representativos, ya que el grupo 1,2 y 6 contienen muy pocos registros. A su vez podemos ver que los registros "0" o "no asignado" son muy numerosos.
+
+ggplot(BiciMAD, aes(ageRange))+geom_bar()+ scale_y_continuous(labels = comma)+xlab("Grupo de edad")+ylab("Numero de usuarios")
+
+#Calculo de medias de la variable tiempo de recorrido, respecto al grupo de edad. Nos centramos en los grupos 3,4 y 5 que son los grupos con mas registros y donde podemos capturar suficiente informacion para sacar conclusiones. Por lo que vemos, los usuarios del grupo 3 realizan recorridos mas cortos que los del grupo de edad 4 y estos menos que los del grupo de edad 5, antes de sacar estas conclusiones, exploraremos en mas detalle.
+
+tapply(BiciMAD$travel_time,BiciMAD$ageRange, mean, na.rm=T)
+
+#Ante tal diferencia en las medias computadas, decido hacer un subset conteniendo unicamente los usuarios con un pase anual, a sabiendas de que el user_type = 3 o empleado y user_type=2 u ocasional podrian distorsionar la media debido a los grandes valores de tiempo de recorrido en la variable: travel_time. 
+
+#Decido hacer la misma media, donde anadiremos un filtro donde la duracion aproximada debe ser superior a los 30 segundos para que no afecte la media general, ya que hay multiples casos donde travel_time no ha sido medida bien. Vemos que el resultado es mas parejo, con medias mucho mas igualadas y sin una gran diferencia entre grupo de edades. 
+
+#De todos modos, podemos decir que los usuarios del grupo 5, son uno de los grupos que mas tiempo utilizan la bicicleta por recorrido efectuado. Los usuarios del grupo de edad 2 y 6 consiguen una media elevada aunque no suponen un gran porcentaje de los registros en nuestros datos. Respecto al gran valor en el grupo de edad 6, teniendo mas de 66 anos con pase anual (user_type = 1) tener una media de tiempo de recorrido tan alta podria significar que la velocidad a la que se efectua el recorrido es mucho menor. 
+
+
+Solo_paseanual<-subset(BiciMAD,user_type=="1" & travel_time>=30)
+
+tapply(Solo_paseanual$travel_time,Solo_paseanual$ageRange, mean, na.rm=T)
+
+#Grafico de la variable tiempo de recorrido, respecto al grupo de edad
+
+ggplot(BiciMAD, aes(ageRange, travel_time)) + geom_violin()+ylim(0,7500)+xlab("Grupo de edad")+ylab("Duracion del recorrido (en segundos)")
+
+#Una vez mas, podemos ver que no hay diferencias notables, hemos acotado travel_time hasta los 7500 segundos, debido a los valores extremos/outliers que presenta la variable. En el grupo 1 podemos ver que no hay una gran cantidad de personas en la media, con datos muy dispersos y con valores altos y bajos.
+
+#Limpiamos
+rm(Solo_paseanual)
+
+```
+
+Tiempo de recorrido o travel_time y su relacion con Tipo de usuario o user_type
+```{r}
+
+#Calculo de medias de la variable tiempo de recorrido, respecto al tipo de usuario
+
+tapply(BiciMAD$travel_time, BiciMAD$user_type, mean, na.rm=T)
+
+#No tendremos en cuenta los user_type = 0, pero podemos obtener conclusiones sobre los demas tipos de usuarios. El user_type = 1 o subscritor de pase anual tiene una media muy inferior al user_type = 2 o usuario ocasional/turista. Esto es logico ya que los subscriptores de pase anual cogeran mas la bici para trayectos mas cortos y de menor duracion mientras que los usuarios ocasionales cogeran la bici para trayectos mas largos y de mayor duracion. El user_type = 3 o empleado es el que mas tiempo de recorrido tiene al tener que realizar la recolocacion de bicicletas.
+
+
+#Grafico de la variable tiempo de recorrido, respecto al tipo de usuario
+ggplot(BiciMAD, aes(user_type, travel_time)) + geom_boxplot()+ylim(0,7500)+xlab("Tipo de usuario")+ylab("Duracion del recorrido (en segundos)")
+
+#En este boxplot, se puede observar el distinto comportamiento de los usuarios respecto a la duracion del recorrido. El tipo 1 tiene una media muy inferior a la del tipo 2 y 3. El tipo 1 tiene una simetria muy pareja con los cuartiles 1 y 3, reflejando un comportamiento mas equitativo respecto a la duracion del recorrido, mientras que la distribucion del tipo 2 es mas dispersa, debido al diferente comportamiento de los usuarios ocasionales.
+
+
+```
+
+#### 4.2-Relacion entre Grupo de edad o ageRange y tipo de usuario o user_type 
+```{r}
+
+#Relacionamos ahora el tipo de usuario y su rango de edad. Lo pondremos en porcentaje ya que en terminos absolutos, hay muchos mas valores de 1 (subscriptor) que de 0 (sin identificar), 2 (usuario ocasional) y 3 (empleados), logicamente.
+
+ggplot(BiciMAD, aes(x=user_type))+geom_bar(aes(fill=ageRange), position = "fill")+xlab("Tipo de usuario")+ylab("Porcentaje(%) de usuarios")
+
+#0:No se ha podido determinar el rango de edad del usuario
+#1: El usuario tiene entre 0 y 16 anos
+#2: El usuario tiene entre 17 y 18 anos
+#3: El usuario tiene entre 19 y 26 anos
+#4: El usuario tiene entre 27 y 40 anos
+#5: El usuario tiene entre 41 y 65 anos
+#6: El usuario tiene 66 anos o mas 
+
+#Como podemos ver, gran parte de los usuarios 2 u ocasionales, no se identifican con su edad al utilizar el servicio. De la misma manera, a gran parte de los usuarios 1 o subscriptores no se les puede identificar. De los identificados como usuarios 1, mas del 50% de usuarios los componen el grupo 4 y 5. El grupo 3 tambien compone alrededor de un 10% aproximadamente.
+
+#Tambien se debe tener en cuenta que el ageRange o grupo de edad 2 lo componen usuarios de 17 y 18 anos de edad, un intervalo que agrupa unicamente 2 anos y que es muy pequeno si se compara con el ageRange o grupo de edad 4 o 5, que agrupan 13 y 24 anos de intervalo.
+
+
+```
+
+#### 4.3-Creacion de mas variables 
+```{r}
+
+#Creacion de la variable Distancia en linea recta y Velocidad aproximada
+BiciMAD$long_start<-as.numeric(as.character(BiciMAD$long_start))
+BiciMAD$lat_start<-as.numeric(as.character(BiciMAD$lat_start))
+BiciMAD$long_end<-as.numeric(as.character(BiciMAD$long_end))
+BiciMAD$lat_end<-as.numeric(as.character(BiciMAD$lat_end))
+
+
+#Calculamos la distancia en linea recta, esto tiene una serie de consecuencias
+BiciMAD$SL_distancia <- distHaversine(BiciMAD[,c("long_start","lat_start")],BiciMAD[,c("long_end","lat_end")])
+#Calculamos la variable distancia en linea recta entre dos estaciones. Logicamente la distancia real sera algo mayor. Tambien debemos tener en cuenta que en los casos donde las estaciones donde se ancla y se desancla la bicicleta sea la misma, la funcion dara un 0/cero.
+
+BiciMAD$Velocidad<- BiciMAD$SL_distancia/BiciMAD$travel_time #en metros/segundo
+#Podremos crear la variable velocidad, ya que tenemos la distancia en linea recta y el tiempo del viaje. Esta Velocidad tiene fallos por lo explicado anteriormente. La variable travel_time no esta bien contabilizada tampoco en muchos casos.
+
+#Distancia entre estaciones respecto a grupo de edad
+ggplot(BiciMAD, aes(x=ageRange, y=SL_distancia))+geom_violin()+xlab("Grupo de edad")+ylab("Distancia (en metros)")+scale_y_continuous(labels=comma)
+
+#Distancia promedio respecto a tipo de usuario
+ggplot(BiciMAD, aes(x=user_type, y=SL_distancia))+geom_violin()+xlab("Tipo de usuario")+ylab("Distancia (en metros)")+scale_y_continuous(labels=comma)
+
+#Velocidad promedio respecto a grupo de edad
+ggplot(BiciMAD, aes(x=ageRange, y=Velocidad))+geom_violin()+xlab("Grupo de edad")+ylab("Velocidad (en m/s)")+scale_y_continuous(labels=comma)+ylim(0,15)
+
+#Velocidad promedio respecto a tipo de usuario
+ggplot(BiciMAD, aes(x=user_type, y=Velocidad))+geom_violin()+xlab("Tipo de usuario")+ylab("Velocidad (en m/s)")+scale_y_continuous(labels=comma)+ylim(0,15)
+
+#Variable de dia
+BiciMAD$Dia <- weekdays(as.Date(BiciMAD$unplug_hourDate))
+BiciMAD$Dia<-as.factor(BiciMAD$Dia)
+
+#Diferencia por dia laborable/fin de semana 
+BiciMAD %>% group_by(Dia) %>% summarize(n=n()) %>%  group_by(Dia) %>% summarize(n.m=mean(n)) %>%ggplot(aes(x=Dia,y=n.m)) + geom_bar(stat='identity') + xlab('Dia de la semana') + ylab('Numero de viajes') + ggtitle("Numero de viajes en bicicleta por dia de la semana")+ scale_y_continuous(labels = comma)
+
+
+#Dias respecto a ageRange
+ggplot(BiciMAD, aes(x=Dia))+geom_bar(aes(fill=ageRange), position = "fill")+xlab("Dia de la semana")+ylab("Porcentaje(%) de usuarios")
+
+#Dias respecto a user_type
+ggplot(BiciMAD, aes(x=Dia))+geom_bar(aes(fill=user_type), position = "fill")+xlab("Dia de la semana")+ylab("Porcentaje(%) de usuarios")
+
+#Dias respecto a travel_time
+BiciMAD_paseyocasional<-subset(BiciMAD, user_type==1|user_type==2)
+
+ggplot(BiciMAD_paseyocasional, aes(x=Dia, y=travel_time))+geom_boxplot()+xlab("Dia de la semana")+ylab("Duracion de recorrido (en segundos)")+scale_y_continuous(labels=comma)+ylim(0,2000)
+
+rm(BiciMAD_paseyocasional)
+
+#Variable de franja horaria
+BiciMAD$unplug_hourTime<-as.numeric(BiciMAD$unplug_hourTime)
+
+BiciMAD$franja_horaria <- ifelse(BiciMAD$unplug_hourTime < 4 | BiciMAD$unplug_hourTime >= 20, "Noche", ifelse(BiciMAD$unplug_hourTime >= 5 & BiciMAD$unplug_hourTime < 12, "Manana", ifelse(BiciMAD$unplug_hourTime >= 12 & BiciMAD$unplug_hourTime < 16, "Tarde", "Tarde-Noche")))
+
+BiciMAD$unplug_hourTime<-as.factor(BiciMAD$unplug_hourTime)
+BiciMAD$franja_horaria<-as.factor(BiciMAD$franja_horaria)
+
+#Franja horaria respecto a grupo de edad
+ggplot(BiciMAD, aes(x=franja_horaria)) + geom_bar(aes(fill = ageRange), position = "fill")
+
+#Franja horaria respecto a tipo de usuario
+ggplot(BiciMAD, aes(x=franja_horaria)) + geom_bar(aes(fill = user_type), position = "fill")
+
+
+
+#Variable estaciones
+BiciMAD$season <- ifelse( BiciMAD$unplug_hourDate < "2018-03-20" | BiciMAD$unplug_hourDate >="2018-12-21", "Invierno",  ifelse(BiciMAD$unplug_hourDate >="2018-03-20" & BiciMAD$unplug_hourDate < "2018-06-21","Primavera",                  ifelse(BiciMAD$unplug_hourDate >="2018-06-21" & BiciMAD$unplug_hourDate<"2018-09-23","Verano","Otono")))     
+
+BiciMAD$season <-as.factor(BiciMAD$season)
+
+#travel_time de estaciones
+ggplot(BiciMAD, aes(season, travel_time)) + geom_boxplot()+xlab("Estacion del ano")+ylab("Duracion del recorrido (en segundos)")+scale_y_continuous(labels = comma)+ylim(0,3000)
+
+
+#20 Marzo a las 16h 14m UTC     -> Primavera  2018-03-20
+#21 Junio a las 10h 7m UTC      -> Verano     2018-06-21
+#23 Septiembre a las 1h 53m UTC -> Otono      2018-09-23
+#21 diciembre a las 22h 22m UTC -> Invierno   2018-12-21
+```
+
+
+
+## 5-Mapas de calor {.tabset .tabset-fade .tabset-pills}
+```{r}
+
+#Filtraremos unicamente por los usuarios, excluyendo los empleados
+BiciMAD_paseyocasional<-subset(BiciMAD, user_type==1|user_type==2)
+
+#Nuevo dataframe, con combinaciones
+users_edad_total<-BiciMAD_paseyocasional %>%
+  group_by(BiciMAD_paseyocasional$user_type,BiciMAD_paseyocasional$ageRange,BiciMAD_paseyocasional$season,BiciMAD_paseyocasional$unplug_hourDate) %>%
+  summarise(Total = n())
+
+#Renombramos
+users_edad_total<-setNames(users_edad_total, c("tipo_usuario", "grupo_edad","estacion","Dia", "n"))
+
+
+#Comparamos grupo de edad con tipo de usuario
+ggplot(users_edad_total, aes(x=grupo_edad,y=tipo_usuario))+geom_tile(aes(fill=n))+scale_fill_gradient()
+
+
+#Comparamos grupo de edad con los dias, para ver quienes son los que mas utilizan las bicicletas a lo largo del ano
+ggplot(users_edad_total, aes(x=Dia,y=grupo_edad))+geom_tile(aes(fill=n))+scale_fill_gradient(low="steelBlue",high="white")
+
+rm(users_edad_total)
+
+```
+
+
+
+## 6-Asimetria por epocas {.tabset .tabset-fade .tabset-pills}
+
+#### 6.1-Invierno
+```{r}
+
+#Filtramos por la estacion y los usuarios con pase anual y ocasionales, no incluiremos los empleados
+
+BiciMAD_Winter<-subset(BiciMAD, season=="Invierno" & user_type==1 | user_type==2)
+
+head(BiciMAD_Winter[order(BiciMAD_Winter$travel_time, decreasing = T),], n=10)
+
+NOrigen_winter<-count(BiciMAD_Winter,BiciMAD_Winter$address_start)
+NDestino_winter<-count(BiciMAD_Winter,BiciMAD_Winter$address_end)
+
+NOrigen_winter<-setNames(NOrigen_winter, c("Estacion_Origen", "Salidas"))
+NDestino_winter<-setNames(NDestino_winter, c("Estacion_Destino", "Entradas"))
+
+Combinado_winter<-left_join(NOrigen_winter, NDestino_winter, by=c("Estacion_Origen"="Estacion_Destino"))
+
+#Creacion de la variable de asimetria
+Combinado_winter$Asimetria_total<-Combinado_winter$Entradas - Combinado_winter$Salidas
+
+
+#Los usuarios anclan en invierno bicis en las siguientes direcciones
+head(arrange(Combinado_winter,desc(Asimetria_total)), n = 10)
+
+#Los usuarios desanclan en invierno bicis en las siguientes direcciones
+head(arrange(Combinado_winter,Asimetria_total), n = 10)
+
+#Limpiamos
+rm(BiciMAD_Winter)
+rm(NOrigen_winter)
+rm(NDestino_winter)
+rm(Combinado_winter)
+
+```
+
+#### 6.2-Primavera
+```{r}
+
+#Filtramos por la estacion y los usuarios con pase anual y ocasionales, no incluiremos los empleados
+
+BiciMAD_Spring<-subset(BiciMAD, season=="Primavera" & user_type==1 | user_type==2)
+
+head(BiciMAD_Spring[order(BiciMAD_Spring$travel_time, decreasing = T),], n=10)
+
+NOrigen_spring<-count(BiciMAD_Spring,BiciMAD_Spring$address_start)
+NDestino_spring<-count(BiciMAD_Spring,BiciMAD_Spring$address_end)
+
+NOrigen_spring<-setNames(NOrigen_spring, c("Estacion_Origen", "Salidas"))
+NDestino_spring<-setNames(NDestino_spring, c("Estacion_Destino", "Entradas"))
+
+Combinado_spring<-left_join(NOrigen_spring, NDestino_spring, by=c("Estacion_Origen"="Estacion_Destino"))
+
+#Creacion de la variable de asimetria
+Combinado_spring$Asimetria_total<-Combinado_spring$Entradas - Combinado_spring$Salidas
+
+#Los usuarios anclan en primavera bicis en las siguientes direcciones
+head(arrange(Combinado_spring,desc(Asimetria_total)), n = 10)
+
+#Los usuarios desanclan en primavera bicis en las siguientes direcciones
+head(arrange(Combinado_spring,Asimetria_total), n = 10)
+
+rm(BiciMAD_Spring)
+rm(NOrigen_spring)
+rm(NDestino_spring)
+rm(Combinado_spring)
+
+```
+
+#### 6.3-Verano
+```{r}
+
+#Filtramos por la estacion y los usuarios con pase anual y ocasionales, no incluiremos los empleados
+
+BiciMAD_Summer<-subset(BiciMAD, season=="Verano" & user_type==1 | user_type==2)
+
+head(BiciMAD_Summer[order(BiciMAD_Summer$travel_time, decreasing = T),], n=10)
+
+NOrigen_summer<-count(BiciMAD_Summer,BiciMAD_Summer$address_start)
+NDestino_summer<-count(BiciMAD_Summer,BiciMAD_Summer$address_end)
+
+NOrigen_summer<-setNames(NOrigen_summer, c("Estacion_Origen", "Salidas"))
+NDestino_summer<-setNames(NDestino_summer, c("Estacion_Destino", "Entradas"))
+
+Combinado_summer<-left_join(NOrigen_summer, NDestino_summer, by=c("Estacion_Origen"="Estacion_Destino"))
+
+#Creacion de la variable de asimetria
+Combinado_summer$Asimetria_total<-Combinado_summer$Entradas - Combinado_summer$Salidas
+
+#Los usuarios anclan en verano bicis en las siguientes direcciones
+head(arrange(Combinado_summer,desc(Asimetria_total)), n = 10)
+
+
+#Los usuarios desanclan en verano bicis en las siguientes direcciones
+head(arrange(Combinado_summer,Asimetria_total), n = 10)
+
+#Limpiamos
+rm(BiciMAD_Summer)
+rm(NOrigen_summer)
+rm(NDestino_summer)
+rm(Combinado_summer)
+
+```
+
+#### 6.4-Otono
+```{r}
+
+#Filtramos por la estacion y los usuarios con pase anual y ocasionales, no incluiremos los empleados
+
+BiciMAD_Fall<-subset(BiciMAD, season=="Otono" & user_type==1 | user_type==2)
+
+head(BiciMAD_Fall[order(BiciMAD_Fall$travel_time, decreasing = T),], n=10)
+
+NOrigen_fall<-count(BiciMAD_Fall,BiciMAD_Fall$address_start)
+NDestino_fall<-count(BiciMAD_Fall,BiciMAD_Fall$address_end)
+
+NOrigen_fall<-setNames(NOrigen_fall, c("Estacion_Origen", "Salidas"))
+NDestino_fall<-setNames(NDestino_fall, c("Estacion_Destino", "Entradas"))
+
+Combinado_fall<-left_join(NOrigen_fall, NDestino_fall, by=c("Estacion_Origen"="Estacion_Destino"))
+
+#Creacion de la variable de asimetria
+Combinado_fall$Asimetria_total<-Combinado_fall$Entradas - Combinado_fall$Salidas
+
+
+#Los usuarios anclan en otono bicis en las siguientes direcciones
+head(arrange(Combinado_fall,desc(Asimetria_total)), n = 15)
+
+#Los usuarios desanclan en otono bicis en las siguientes direcciones
+head(arrange(Combinado_fall,Asimetria_total), n = 15)
+
+
+rm(BiciMAD_Fall)
+rm(NOrigen_fall)
+rm(NDestino_fall)
+rm(Combinado_fall)
+
+#Extraemos los resultados y los compararemos.
+
+```
+
+
+
+## 7-Calculo de asimetria total {.tabset .tabset-fade .tabset-pills}
+```{r}
+
+#Como podemos observar, los valores mas altos son realizados por usuarios con pase anual, aunque la media de los usuarios ocasionales sea mas alta.
+
+head(BiciMAD[order(BiciMAD$travel_time, decreasing = T),], n=10)
+
+
+NOrigen<-count(BiciMAD,BiciMAD$address_start)
+NDestino<-count(BiciMAD,BiciMAD$address_end)
+
+NOrigen<-setNames(NOrigen, c("Estacion_Origen", "Salidas"))
+NDestino<-setNames(NDestino, c("Estacion_Destino", "Enganchadas"))
+
+Combinado<-left_join(NOrigen, NDestino, by=c("Estacion_Origen"="Estacion_Destino"))
+
+#Creacion de la variable de asimetria
+Combinado$Asimetria_total<-Combinado$Enganchadas - Combinado$Salidas
+
+#Crearemos un data frame similar al Combinado con los datos de asimetria, en el cual no se repitan estaciones
+datos_estacion<-distinct(BiciMAD, address_start , lat_start , long_start)
+
+#Juntaremos las cifras totales de asimetria con este nuevo dataframe
+BiciMAD_Assm<-left_join(Combinado,datos_estacion, by=c("Estacion_Origen"="address_start"))
+
+#Podemos ver cuales son las estaciones con mas desanclajes y anclajes, independientemente de la estacion
+head(arrange(BiciMAD_Assm,desc(Asimetria_total)), n = 10)
+head(arrange(BiciMAD_Assm,Asimetria_total), n = 10)
+
+#Limpiamos
+rm(NDestino)
+rm(NOrigen)
+rm(datos_estacion)
+rm(Combinado)
+
+BiciMAD$X<-NULL
+
+```
+
+
+
+## 8-Rutas mas populares {.tabset .tabset-fade .tabset-pills}
+
+#### 8.1-Rutas mas populares por usuarios suscriptores y ocasionales  
+```{r}
+
+#Para determinar el comportamiento de los usuarios realizaremos un estudio conjunto de los usuarios user_type = 1 y user_type = 2, aunque realizaremos distinciones entre ambos grupos si es necesario
+
+
+BiciMAD_paseyocasional$ruta <- paste(BiciMAD_paseyocasional$address_start, BiciMAD_paseyocasional$address_end, sep= " -> ")
+
+#Rutas mas populares por los usuarios
+BiciMAD_paseyocasional%>% group_by(ruta) %>% summarize(count=n()) %>% arrange(desc(count)) %>% top_n(n=20) %>% knitr::kable(format="markdown")
+
+#Estaciones de inicio mas populares por parte de los usuarios 
+BiciMAD_paseyocasional%>% group_by(address_start) %>% summarize(count=n()) %>% arrange(desc(count)) %>% top_n(n=20) %>% knitr::kable(format="markdown")
+
+#Estaciones de destino mas populares por parte de los usuarios
+BiciMAD_paseyocasional%>% group_by(address_end) %>% summarize(count=n()) %>% arrange(desc(count)) %>% top_n(n=20) %>% knitr::kable(format="markdown")
+
+
+```
+
+#### 8.2-Rutas mas populares por los empleados
+```{r}
+#Para determinar el comportamiento de los empleados realizaremos un estudio con los datos user_type = 3
+
+BiciMAD_empleados<-subset(BiciMAD, user_type==3 & address_end!=address_start)
+
+BiciMAD_empleados$ruta <- paste(BiciMAD_empleados$address_start, BiciMAD_empleados$address_end, sep= " -> ")
+
+
+#Rutas mas populares por los empleados
+BiciMAD_empleados%>% group_by(ruta) %>% summarize(count=n()) %>% arrange(desc(count)) %>% top_n(n=20) %>% knitr::kable(format="markdown")
+
+#Estaciones de inicio mas populares por parte de los empleados 
+BiciMAD_empleados%>% group_by(address_start) %>% summarize(count=n()) %>% arrange(desc(count)) %>% top_n(n=20) %>% knitr::kable(format="markdown")
+
+#Estaciones de destino mas populares por parte de los empleados 
+BiciMAD_empleados%>% group_by(address_end) %>% summarize(count=n()) %>% arrange(desc(count)) %>% top_n(n=20) %>% knitr::kable(format="markdown")
+```
+
+
+
+
+## 9-Mapas de Densidad y Asimetria {.tabset .tabset-fade .tabset-pills}
+
+#### 9.1-Mapa: Densidad de bicicletas Salidas
+```{r}
+
+#register_google(key = "Tu API de Google Cloud", write=TRUE)
+
+#25% como muestra sin utilizar el paquete caret
+tamano_muestra <- floor(0.25 * nrow(BiciMAD))
+
+#Metemos la semilla 1 para reproducir la misma reasignacion en otros ordenadores
+set.seed(1)
+index_muestra<- sample(seq_len(nrow(BiciMAD)), size = tamano_muestra)
+
+muestra <- BiciMAD[index_muestra, ]
+
+rm(train_ind)
+rm(index_muestra)
+rm(tamano_muestra)
+
+
+
+BiciMAD_fill<-BiciMAD_paseyocasional %>% group_by(long_start, lat_start) %>% summarise(Total=n())
+
+#Sacamos el mapa de Madrid de Google Maps mediante nuestra API y ggmap
+mapa_densidad<-ggmap(get_googlemap(center = c(lon = -3.6859308, lat = 40.4428951), zoom = 13, scale = 2, maptype ="terrain", color = "color")) 
+
+#Areas de madrid con mas desenganches sobre una muestra del 25% del dataset
+mapa_densidad + stat_density2d(aes(x = long_start , y = lat_start, fill = ..level.., alpha =0.2), data = muestra, geom = "polygon") 
+
+
+mapa_densidad + stat_density2d(aes(x = long_start , y = lat_start, fill = ..level.., alpha =0.1), data = BiciMAD_fill, geom = "polygon") 
+
+rm(muestra)
+rm(BiciMAD_fill)
+```
+
+#### 9.2-Mapa: Asimetria total 
+```{r, cache=TRUE}
+
+BiciMAD_Assm$long_start<-as.numeric(as.character(BiciMAD_Assm$long_start))
+BiciMAD_Assm$lat_start<-as.numeric(as.character(BiciMAD_Assm$lat_start))
+
+#Creacion de la variable de asimetria
+BiciMAD_Assm$Categoria_Asimetria<-ifelse(BiciMAD_Assm$Asimetria_total<=-800, "Muy Critico (< -800)",ifelse(BiciMAD_Assm$Asimetria_total >-800 & BiciMAD_Assm$Asimetria_total<=-500, "Critico (-800 to -500)",ifelse(BiciMAD_Assm$Asimetria_total>-500 & BiciMAD_Assm$Asimetria_total<=0, "Algo Critico(-500 to 0)",ifelse(BiciMAD_Assm$Asimetria_total>=0 & BiciMAD_Assm$Asimetria_total<10, "Normal(10-0)","Buena(>10)"))))
+
+#funcion de paleta de colores
+ColorPalette<- colorFactor(palette=c("Red","Blue","Orange", "Black", "Green"),domain= BiciMAD_Assm$Categoria_Asimetria)
+
+#Mapa de asimetria
+BiciMAD_mapa <-leaflet(data=BiciMAD_Assm) %>%
+  addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
+  setView(lng=-3.6859308,lat=40.4428951, zoom = 12) %>% 
+  addCircleMarkers(lng=BiciMAD_Assm$long_start,lat=BiciMAD_Assm$lat_start,
+                   clusterOptions = markerClusterOptions(),         
+                   color=ColorPalette(BiciMAD_Assm$Categoria_Asimetria),
+                   label=paste("Nombre:",BiciMAD_Assm$Estacion_Origen,". Asim:", BiciMAD_Assm$Asimetria_total))%>%
+  addLegend(position="bottomright", pal=ColorPalette, values=BiciMAD_Assm$Categoria_Asimetria, title="Nivel de asimetria")
+
+#Visualizacion del mapa
+BiciMAD_mapa
+
+```
+
+#### 9.3-Mapa: Top 10 estaciones con mas y menos asimetria total
+```{r}
+
+#Top 10 estaciones con asimetria negativa
+top10negativo<-head(arrange(BiciMAD_Assm,Asimetria_total), n = 10)
+top10negativo
+
+#Top 10 estaciones con asimetria positiva
+top10positivo<-head(arrange(BiciMAD_Assm,desc(Asimetria_total)), n = 10)
+top10positivo
+
+#Las juntamos en un dataframe
+top10combinado<-full_join(top10negativo,top10positivo)
+top10combinado
+
+#Creamos una nueva variable de categoria de asimetria
+top10combinado$Categoria_Asimetria<-ifelse(top10combinado$Asimetria_total<0,"Asimetria Negativa","Asimetria Positiva")
+
+#Creamos una nueva paleta de colores
+ColorPaleta_top10<- colorFactor(palette=c("Red","Green"),domain= top10combinado$Categoria_Asimetria)
+
+#Construiremos el mapa
+Top10_mapa <- leaflet(data=top10combinado) %>%
+  addProviderTiles(providers$Esri.WorldGrayCanvas) %>%     
+  setView(lng=-3.6859308,lat=40.4428951, zoom = 12) %>%                           
+  addCircleMarkers(lng=top10combinado$long_start,lat=top10combinado$lat_start,
+                   clusterOptions = markerClusterOptions(),
+                   color=ColorPaleta_top10(top10combinado$Categoria_Asimetria),
+                   label=paste("Nombre:",top10combinado$Estacion_Origen,". Asim:", top10combinado$Asimetria_total))%>%
+  addLegend(position="bottomright", pal=ColorPaleta_top10, values=top10combinado$Categoria_Asimetria, title="Nivel de asimetria")
+
+#Visualizamos
+Top10_mapa
+
+```
+
+```{r}
+
+#utils::write.csv(BiciMAD_Assm,"BiciMAD_Assm.csv")
+#utils::write.csv(BiciMAD,"BiciMAD_clean.csv")
+#utils::write.csv(top10negativo,"top10negativo.csv")
+#utils::write.csv(top10positivo,"top10positivo.csv")
+
+rm(BiciMAD_Assm)
+rm(BiciMAD)
+rm(mapa_densidad)
+rm(ColorPalette)
+rm(BiciMAD_mapa)
+rm(ColorPaleta_top10)
+rm(Top10_mapa)
+rm(top10negativo)
+rm(top10positivo)
+
+```
+
+
+## 10-Regresion lineal: Demanda vs.clima {.tabset .tabset-fade .tabset-pills}
+
+#### 10.1-Agrupacion del numero de usuarios respecto a las variables elegidas
+```{r}
+
+#Contamos el numero de bicicletas por dia/demanda diaria
+
+Bicis_dia<-count(BiciMAD_paseyocasional,unplug_hourDate)
+
+Bicis_dia<-setNames(Bicis_dia,c("Date","Demanda"))
+Bicis_dia$Date<-as.Date(Bicis_dia$Date,format="%Y/%m/%d")
+
+#Leemos los datos del clima para 2018. Utilizamos la estacion del Parque de El Retiro ya que esta proxima a muchas estaciones de BiciMAD, es una de las zonas con mas estaciones proximas y la estacion meteorologica que mejor mide, ya que esta poco expuesta a alteraciones por radiacion, debido a encontrarse en una zona verde.
+datos_clima<-read.csv("2018 Weatherdata_RETIRO.csv", sep=";")
+datos_clima$Date<-as.Date(datos_clima$Date,format="%d/%m/%Y")
+
+
+#Juntaremos los datos
+datos_modelo<-merge(Bicis_dia, datos_clima, by="Date", all.x = TRUE, all.y=TRUE)
+
+#Quitamos los NAs en la variable demanda, debido a que BiciMAD no esta disponible todos los dias del ano
+datos_modelo<-datos_modelo[!is.na(datos_modelo$Demanda), ]
+
+#Quitaremos las variables irrelevantes
+datos_modelo$Station_id<-NULL
+datos_modelo$Station_name<-NULL
+datos_modelo$Province<-NULL
+datos_modelo$Height_in_meters<-NULL
+
+
+#Formato variables a numericas
+datos_modelo$Rain_amount<-as.numeric(as.character(datos_modelo$Rain_amount))
+datos_modelo$Tmean<-as.numeric(as.character(datos_modelo$Tmean))
+datos_modelo$Tmin<-as.numeric(as.character(datos_modelo$Tmin))
+datos_modelo$Wind_Direction<-as.numeric(as.character(datos_modelo$Wind_Direction))
+datos_modelo$Wind_speed<-as.numeric(as.character(datos_modelo$Wind_speed))
+datos_modelo$Wind_Gust<-as.numeric(as.character(datos_modelo$Wind_Gust))
+datos_modelo$Pressure_max<-as.numeric(as.character(datos_modelo$Pressure_max))
+datos_modelo$Pressure_min<-as.numeric(as.character(datos_modelo$Pressure_min))
+datos_modelo$Month<-as.numeric(as.character(datos_modelo$Month))
+datos_modelo$Tmax<-as.numeric(as.character(datos_modelo$Tmax))
+
+```
+
+
+
+#### 10.2-Regresiones lineales simples 
+A simple vista, no parece que una regresion lineal con relaciones no lineales sea lo ideal. Decidimos dibujar el siguiente modelo lineal simple y construimos uno mejor en base a esto
+```{r}
+
+library(stats)
+summary(datos_modelo)
+
+
+
+
+#Primer modelo linear
+modelo<-lm(Demanda~Month+Tmean+Tmin+Tmax+Rain_amount+Wind_Direction+Wind_Gust+Wind_speed+Pressure_min+Pressure_max,data=datos_modelo)
+summary(modelo)
+
+#Segundo modelo linear
+modelo2<-lm(Demanda~Month+Tmean+Rain_amount+Wind_Gust+Wind_speed+Pressure_min+Pressure_max,data=datos_modelo)
+summary(modelo2)
+
+#Tercer modelo linear
+modelo3<-lm(Demanda~Month+Tmean+Rain_amount+Wind_Gust,data=datos_modelo)
+summary(modelo3)
+
+
+#Introducimos ruido a los datos con NA
+datos_modelo$Wind_Gust[is.na(datos_modelo$Wind_Gust)] <- 0 
+datos_modelo$Rain_amount[is.na(datos_modelo$Rain_amount)] <- 0 
+
+#Este modelo sera peor que el 5 debido al ruido, pero podremos extraer los resultados al tener los datos del modelo y el modelo6, el mismo numero de registros/observaciones en total
+modelo6<-lm(Demanda~Month+Tmean+Rain_amount+Wind_Gust,data=datos_modelo)
+summary(modelo6)
+
+#Extraeremos el modelo final 
+Fitted<-predict(modelo6)
+Fitted<-as.data.frame(Fitted)
+datos_modelo$Fitted<- Fitted$Fitted
+
+
+#Con este simple analisis, podemos ver que la temperatura media y su cuadrado tiene el mayor efecto, seguido de la lluvia y las rachas de viento. Quiero ver como de preciso son capaces de adivinar estas variables la demanda real. Lo normal es que no obtengamos un buen resultado, ya que solo contenemos 357 dias de observaciones. Por lo general, con series temporales se suelen realizar estos analisis con 5 anos de datos.
+
+#Realizamos un grafico Demanda Real vs. Demanda predicha
+ggplot(datos_modelo,aes(x=Fitted, y=Demanda))+geom_point()+xlab("Demanda predicha")+ylab("Demanda Real")+geom_abline()+ggtitle("Observaciones Demanda Real vs. Predicha")
+
+
+#Realizamos un grafico de los valores predecidos
+datos_modelo$Date<-as.Date(datos_modelo$Date)
+ggplot(datos_modelo, aes(x=Date)) + 
+  geom_line(aes(y = Demanda), color = "red") + 
+  geom_line(aes(y = Fitted), color="blue", linetype="twodash") +ggtitle("Valores Demanda Real(rojo) vs Valores Demanda Predicha (azul)")
+
+#Modelos no lineales - en vista al analisis descriptivo del clima, podriamos intentar construir un modelo no lineal con una funcion S-curve, aunque no mejoraria demasiado. Ademas podemos concluir que este modelo no serviria para machine learning (muy impreciso) debido a los altos residuos en esta muestra y un coeficiente de R^2 que apenas explica un 41% de la variable dependiente.
+
+#scurve = function(x, center, width) {1 / (1 + exp(-(x - center) / width))}
+
+```
+
+
+
+## 11-Analisis del clima y demanda diaria {.tabset .tabset-fade .tabset-pills}
+
+Analisis de la variable Demanda Diaria respecto a diferentes tipos de variables climaticas
+```{r}
+
+#Temperatura media respecto a demanda diaria
+ggplot(datos_modelo, aes(Tmean,Demanda)) + geom_smooth() + labs(x = "Temperatura Media (centigrados)", y = "Demanda diaria")
+
+#Racha de viento respecto a demanda diaria
+ggplot(datos_modelo, aes(Wind_Gust,Demanda)) + geom_smooth() + labs(x = "Racha del viento (m/s)", y = "Demanda diaria")
+
+#Velocidad del viento respecto a demanda diaria
+ggplot(datos_modelo, aes(Wind_speed,Demanda)) + geom_smooth() + labs(x = "Velocidad del viento (m/s)", y = "Demanda diaria")
+
+#Precipitaciones respecto a demanda diaria
+ggplot(datos_modelo, aes(Rain_amount,Demanda)) + geom_smooth() + labs(x = "Precipitacion por metro cuadrado (mm = l/m2)", y = "Demanda diaria")
+
+#Temperatura media respecto al mes
+datos_modelo$Month<-as.factor(datos_modelo$Month)
+ggplot(datos_modelo, aes(Month,Tmean)) + geom_violin() + labs(y = "Temperatura Media (centigrados)", x = "Mes")
+
+#Temperatura maxima respecto a Demanda diaria
+ggplot(datos_modelo, aes(Tmax,Demanda)) + geom_smooth() + labs(y = "Demanda diaria", x = "Temperatura Maxima (centigrados)")
+
+
+rm(datos_clima)
+```
+
+
+
+## 12-Movimientos por hora {.tabset .tabset-fade .tabset-pills}
+
+> En esta seccion intentaremos explicar a que horas se mueven mas los usuarios y a que hora se mueven mas los empleados
+
+```{r}
+
+NBicis_usuarios<-count(BiciMAD_paseyocasional,unplug_hourTime)
+NBicis_empleados<-count(BiciMAD_empleados,unplug_hourTime)
+
+NBicis_usuarios<-setNames(NBicis_usuarios,c("Hora","Numero_usuarios"))
+NBicis_empleados<-setNames(NBicis_empleados,c("Hora","Numero_empleados"))
+
+Uso_hora<-merge(NBicis_empleados,NBicis_usuarios, by="Hora")
+
+Uso_hora$Hora<-as.factor(Uso_hora$Hora)
+Uso_hora$Numero_empleados <-as.numeric(as.character(Uso_hora$Numero_empleados))
+Uso_hora$Numero_usuarios<-as.numeric(as.character(Uso_hora$Numero_usuarios))
+
+ggplot(Uso_hora)+geom_line(aes(Hora,Numero_usuarios, group=1, col="Usuarios"))+geom_line(aes(Hora,Numero_empleados, col="Empleados", group=2))+ylab("Numero de Bicicletas")+xlab("Hora")+scale_y_continuous(labels = comma)+ggtitle("Numero de usuarios (azul) vs. Numero de empleados (rojo) por hora")
+
+```
+
+
+## 13-Modelos no supervisados {.tabset .tabset-fade .tabset-pills}
+
+> Realizamos un analisis por clusters despues de multiples transformaciones de los datos facilitados por el ayuntamiento de Madrid. Se obtuvo un registro en formato JSON, que se transformo y formateo a XLSX, con las bicicletas disponibles, bases libres donde anclar, numero de reservas y mas, por dia y por hora del mes de septiembre. Se computaron las medias a traves de una tabla dinamica. Estas medias son las usadas para analizar las estaciones por clusters.
+
+### K-means Clustering
+
+#### 13.1-Primera agrupacion por clusters
+Agrupacion por medias mensuales, plano de 8 dimensiones (4 semanas, 2 variables)
+```{r}
+
+estaciones_sep<-read.csv("estaciones_septiembre_mensual.csv", sep=";")
+str(estaciones_sep)
+
+
+
+#Cargamos la libreria
+library(factoextra)
+
+#Pondremos la variable del nombre de la estacion como nombre de columna
+estaciones_sep_rows <- data.frame(estaciones_sep[,-1], row.names=estaciones_sep[,1])
+
+#Seleccionamos las variables
+estaciones_sep_rows$lat.estacion<-NULL
+estaciones_sep_rows$longitud.estacion<-NULL
+#estaciones_sep_rows_var <- estaciones_sep_rows[,1:28]
+
+#Quitaremos las estaciones no operativas, Red de San Luis, Carretas y Anton Martin
+estaciones_sep_rows<-estaciones_sep_rows[!(estaciones_sep_rows$avg.ocupacion.ancladas==0.0000000 & estaciones_sep_rows$avg.bases.libres==0.0000000),]
+
+
+#Escalamos las variables seleccionadas del dataframe a las mismas dimensiones
+estaciones_sep_scaled <- scale(estaciones_sep_rows)
+
+
+#Obtenemos las distancias:
+distancia <- get_dist(estaciones_sep_scaled)
+fviz_dist(distancia,lab_size = 5.2)
+
+# Encontramos el numero de clusters: K optimo
+fviz_nbclust(estaciones_sep_scaled,kmeans,method="wss") # Elbow
+fviz_nbclust(estaciones_sep_scaled,kmeans,method="silhouette") # Silhouette
+
+
+# Kmeans
+a <- kmeans(estaciones_sep_scaled , 5 , nstart=15)
+a$cluster
+a$size
+a$centers
+
+fviz_cluster(a, data=estaciones_sep_scaled, labelsize = 7)
+
+
+# Agrego cluster asociado
+estaciones_sep_rows$cluster <- a$cluster
+
+# Resumen por cluster
+
+estaciones_sep<-estaciones_sep[!(estaciones_sep$avg.ocupacion.ancladas==0.0000000 & estaciones_sep$avg.bases.libres==0.0000000),]
+
+aggregate(estaciones_sep,list(estaciones_sep_rows$cluster),mean)
+a$size
+
+```
+> 5 grupos de estaciones con comportamientos operativos muy diferentes entre sí.
+
+### Hierarchical Clustering
+
+#### 13.2-Segunda agrupacion por clusters
+
+Utilizaremos los datos mensuales del punto 13.1. Pero esta vez utilizamos clustering jerarquico
+```{r}
+
+#Calculamos las distancias
+static.hc <- hclust(dist(estaciones_sep_scaled))
+fviz_dist(dist(estaciones_sep_scaled), lab_size = 4)
+
+#Como hemos visto hay algunas estaciones que han saltado del grupo 2 al 1. Eso significa que existen una especie de estaciones entre medias. Decidimos construir el dendograma con 3 clusters.
+static.hc <- hcut(estaciones_sep_scaled, k = 5)
+
+#Pintamos el dendrograma
+fviz_dend(static.hc, rect = TRUE, cex = 0.5, k_colors = c("#E69F00", "#56B4E9","blue","black", "red"))
+
+```
+
+
+## 14-Mapa de Clusters {.tabset .tabset-fade .tabset-pills}
+
+Vamos a realizar ahora un mapa con las estaciones por cluster, para ver si podemos ver algun patron a nivel geografico.
+
+```{r}
+
+
+
+#Sacamos la categoria de cluster de nuestra variable a
+cluster_list<-as.data.frame(a$cluster)
+cluster_list<-setNames(cluster_list,"cluster")
+
+cluster_listhc <-as.data.frame(static.hc$cluster)
+cluster_listhc<-setNames(cluster_listhc,"clusterhc")
+
+#Convertimos las row.names a una columna con el nombre de la estacion
+cluster_list<-as_tibble(rownames_to_column(cluster_list, var = "nombre.estacion"))
+
+cluster_listhc<-as_tibble(rownames_to_column(cluster_listhc, var = "nombre.estacion"))
+
+#Lo unimos a nuestro dataset original
+#estaciones_sep<-setNames(estaciones_sep, c("nombre.estacion","avg.ocupacion.ancladas","avg.bases.libres","avg.capacidad.estacion", "avg.bases.inoperativas","avg.bases.operativas" etc.))
+
+
+cluster_data<-left_join(cluster_list,cluster_listhc, by="nombre.estacion")
+
+rm(cluster_listhc)
+rm(cluster_list)
+
+
+cluster_dataset<-left_join(cluster_data,estaciones_sep, by="nombre.estacion")
+
+#Crearemos un mapa con la nueva columna
+
+#Sacamos el mapa de Madrid de Google Maps con nuestra API y ggmap
+mapa_clusters<-ggmap(get_googlemap(center = c(lon = -3.7, lat = 40.43), zoom = 13, scale = 2, maptype ="terrain", color = "bw")) 
+
+#Crearemos un mapa con los clusters
+cluster_dataset$cluster<-as.factor(cluster_dataset$cluster)
+cluster_dataset$clusterhc<-as.factor(cluster_dataset$clusterhc)
+cluster_dataset$longitud.estacion<-as.numeric(as.character(cluster_dataset$longitud.estacion))
+cluster_dataset$lat.estacion<-as.numeric(as.character(cluster_dataset$lat.estacion))
+
+mapa_clusters + geom_point(aes(y =lat.estacion , x = longitud.estacion , color = cluster), data=cluster_dataset)+scale_color_manual(values=c("#E69F00", "#56B4E9","blue","black", "red"))
+
+
+
+
+
+mapa_clusters + geom_point(aes(y =lat.estacion , x = longitud.estacion , color = clusterhc), data=cluster_dataset)+scale_color_manual(values=c("#E69F00", "#56B4E9","blue","black", "red"))
+
+
+```
+
+> Como vemos las zonas mas alejadas y algunas proximas al centro son las de un cluster. Toda la zona sur que esta muy proxima entre si puede servir para reponer las biciletas de la zona centro, donde esta la mayoria de los demas clusteres. El mayor problema esta al norte del Parque de El Retiro, donde encontramos poca proximidad entre estaciones con alto numero de ocupacion, especialmente en el barrio de Salamanca. No obstante, al este del Retiro existe una zona donde todas las estaciones gozan de disponibilidad y siempre hay bicicletas. Ademas, se podria aprovechar la vertical de Dr.Esquerdo para subir estas bicicletas a la zona de Salamanca.
+
+
+
+
+#### Nota final
+Cabe destacar que solo se ha analizado el periodo de 2018, ya que 2017 y 2019 se muestran incompletos en el portal OPENDATA. Al tratar con series temporales el comportamiento de los usuarios no es el mismo (e.j en Invierno hay menos viajes y posiblemente a estaciones mas cercanas debido al frio). Por ello, al disponer unicamente de este ano al completo, se ha elaborado el estudio con estos mismos datos. En 2019, se ha realizado la primera expansion de BiciMAD hacia Tetuan como exponemos en las observaciones, por lo que habria que realizar este mismo estudio cuando salgan los datos. En 2020, se ha acordado la siguiente expansion del sistema mas alla de la M-30.
+
+El analisis continua en el rebalanceo por clustering con series temporales.
+
+> Noticias recientes sobre BiciMAD: https://elpais.com/ccaa/2019/10/13/madrid/1570998467_632903.html
