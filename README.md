@@ -10,4 +10,4 @@ In this repository, you will find common and advanced data analyses for bike ren
      
   2. ARIMA/SARIMA Model development for Demand forecasting of bike rental systems
      
-  3. A novel approach on rebalancing more efficiently the system (correcting assymetry) using Time Series Clustering and Dynamic Time Wraping distances.
+  3. A novel approach on rebalancing more efficiently the system (correcting assymetry) using Time Series Clustering and Dynamic Time Warping distances.
